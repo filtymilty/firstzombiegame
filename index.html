@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FPS Zombie Game</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="crosshair"></div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Map
+        const mapSize = 16;
+        const tileSize = 64;
+        const map = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,1,0,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,1,1,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,1,0,1,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        // Player
+        const player = {
+            x: 2 * tileSize,
+            y: 2 * tileSize,
+            angle: 0,
+            speed: 3,
+            rotSpeed: 0.05
+        };
+
+        // Zombies
+        const zombies = [];
+        const zombieCount = 5;
+
+        for (let i = 0; i < zombieCount; i++) {
+            zombies.push({
+                x: (Math.random() * (mapSize - 2) + 1) * tileSize,
+                y: (Math.random() * (mapSize - 2) + 1) * tileSize,
+                speed: 0.5 + Math.random()
+            });
+        }
+
+        function castRay(angle) {
+            let rayX = player.x;
+            let rayY = player.y;
+            let rayAngle = angle;
+
+            let xOffset = Math.cos(rayAngle);
+            let yOffset = Math.sin(rayAngle);
+
+            let distance = 0;
+            let hitWall = false;
+
+            while (!hitWall && distance < mapSize * tileSize) {
+                distance += 1;
+                rayX += xOffset;
+                rayY += yOffset;
+
+                let testX = Math.floor(rayX / tileSize);
+                let testY = Math.floor(rayY / tileSize);
+
+                if (testX < 0 || testX >= mapSize || testY < 0 || testY >= mapSize) {
+                    hitWall = true;
+                    distance = mapSize * tileSize;
+                } else {
+                    if (map[testY][testX] > 0) {
+                        hitWall = true;
+                    }
+                }
+            }
+
+            return distance;
+        }
+
+        function drawScene() {
+            const fov = Math.PI / 3;
+            const rayCount = canvas.width;
+            const angleStep = fov / rayCount;
+
+            for (let i = 0; i < rayCount; i++) {
+                const rayAngle = player.angle - fov / 2 + i * angleStep;
+                const distance = castRay(rayAngle);
+                const wallHeight = (tileSize * canvas.height) / distance;
+
+                let wallColor = 'rgb(150, 150, 150)';  // Gray for walls
+
+                ctx.fillStyle = wallColor;
+                ctx.fillRect(i, (canvas.height - wallHeight) / 2, 1, wallHeight);
+
+                // Floor
+                ctx.fillStyle = 'rgb(50, 50, 50)';
+                ctx.fillRect(i, (canvas.height + wallHeight) / 2, 1, (canvas.height - wallHeight) / 2);
+
+                // Ceiling
+                ctx.fillStyle = 'rgb(100, 100, 150)';
+                ctx.fillRect(i, 0, 1, (canvas.height - wallHeight) / 2);
+            }
+        }
+
+        function drawZombies() {
+            const fov = Math.PI / 3;
+            zombies.forEach(zombie => {
+                const dx = zombie.x - player.x;
+                const dy = zombie.y - player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx);
+
+                const relativeAngle = angle - player.angle;
+                if (Math.abs(relativeAngle) < fov / 2 || Math.abs(relativeAngle) > Math.PI * 2 - fov / 2) {
+                    const projectedHeight = (tileSize * canvas.height) / distance;
+                    const screenX = (relativeAngle + fov / 2) / fov * canvas.width;
+
+                    // Draw zombie body (green)
+                    ctx.fillStyle = 'rgb(0, 150, 0)';
+                    ctx.fillRect(screenX - projectedHeight / 4, (canvas.height - projectedHeight) / 2, projectedHeight / 2, projectedHeight);
+
+                    // Draw zombie head (darker green)
+                    ctx.fillStyle = 'rgb(0, 100, 0)';
+                    ctx.fillRect(screenX - projectedHeight / 6, (canvas.height - projectedHeight) / 2, projectedHeight / 3, projectedHeight / 3);
+
+                    // Draw zombie arms (lighter green)
+                    ctx.fillStyle = 'rgb(0, 200, 0)';
+                    ctx.fillRect(screenX - projectedHeight / 3, (canvas.height - projectedHeight * 0.7) / 2, projectedHeight / 6, projectedHeight * 0.4);
+                    ctx.fillRect(screenX + projectedHeight / 6, (canvas.height - projectedHeight * 0.7) / 2, projectedHeight / 6, projectedHeight * 0.4);
+                }
+            });
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawScene();
+            drawZombies();
+
+            // Move zombies towards player
+            zombies.forEach(zombie => {
+                const dx = player.x - zombie.x;
+                const dy = player.y - zombie.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                zombie.x += (dx / dist) * zombie.speed;
+                zombie.y += (dy / dist) * zombie.speed;
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+
+        // Handle player movement
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.key] = true);
+        document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        function movePlayer() {
+            const moveSpeed = player.speed;
+            const rotSpeed = player.rotSpeed;
+
+            if (keys['ArrowUp'] || keys['w']) {
+                player.x += Math.cos(player.angle) * moveSpeed;
+                player.y += Math.sin(player.angle) * moveSpeed;
+            }
+            if (keys['ArrowDown'] || keys['s']) {
+                player.x -= Math.cos(player.angle) * moveSpeed;
+                player.y -= Math.sin(player.angle) * moveSpeed;
+            }
+            if (keys['ArrowLeft'] || keys['a']) {
+                player.angle -= rotSpeed;
+            }
+            if (keys['ArrowRight'] || keys['d']) {
+                player.angle += rotSpeed;
+            }
+        }
+
+        function update() {
+            movePlayer();
+            requestAnimationFrame(update);
+        }
+        update();
+
+        // Shooting mechanic
+        canvas.addEventListener('click', () => {
+            const fov = Math.PI / 3;
+            zombies.forEach((zombie, index) => {
+                const dx = zombie.x - player.x;
+                const dy = zombie.y - player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx);
+
+                const relativeAngle = angle - player.angle;
+                if ((Math.abs(relativeAngle) < fov / 4 || Math.abs(relativeAngle) > Math.PI * 2 - fov / 4) && distance < tileSize * 5) {
+                    zombies.splice(index, 1);
+                    if (zombies.length === 0) {
+                        alert('You won! All zombies eliminated.');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
