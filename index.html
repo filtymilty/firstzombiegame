@@ -9,6 +9,7 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
+            background-color: black;
         }
         #gameCanvas {
             width: 100%;
@@ -26,19 +27,29 @@
             transform: translate(-50%, -50%);
             pointer-events: none;
         }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
     <div id="crosshair"></div>
+    <div id="score">Score: 0</div>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Map
+        let score = 0;
+
         const mapSize = 16;
         const tileSize = 64;
         const map = [
@@ -60,7 +71,6 @@
             [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
         ];
 
-        // Player
         const player = {
             x: 2 * tileSize,
             y: 2 * tileSize,
@@ -69,7 +79,6 @@
             rotSpeed: 0.05
         };
 
-        // Zombies
         const zombies = [];
         const zombieCount = 5;
 
@@ -178,8 +187,13 @@
                 const dx = player.x - zombie.x;
                 const dy = player.y - zombie.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                zombie.x += (dx / dist) * zombie.speed;
-                zombie.y += (dy / dist) * zombie.speed;
+                if (dist > 10) {
+                    zombie.x += (dx / dist) * zombie.speed;
+                    zombie.y += (dy / dist) * zombie.speed;
+                } else {
+                    alert('Game Over! A zombie reached you.');
+                    document.location.reload();
+                }
             });
 
             requestAnimationFrame(gameLoop);
@@ -197,12 +211,20 @@
             const rotSpeed = player.rotSpeed;
 
             if (keys['ArrowUp'] || keys['w']) {
-                player.x += Math.cos(player.angle) * moveSpeed;
-                player.y += Math.sin(player.angle) * moveSpeed;
+                const newX = player.x + Math.cos(player.angle) * moveSpeed;
+                const newY = player.y + Math.sin(player.angle) * moveSpeed;
+                if (!isWall(newX, newY)) {
+                    player.x = newX;
+                    player.y = newY;
+                }
             }
             if (keys['ArrowDown'] || keys['s']) {
-                player.x -= Math.cos(player.angle) * moveSpeed;
-                player.y -= Math.sin(player.angle) * moveSpeed;
+                const newX = player.x - Math.cos(player.angle) * moveSpeed;
+                const newY = player.y - Math.sin(player.angle) * moveSpeed;
+                if (!isWall(newX, newY)) {
+                    player.x = newX;
+                    player.y = newY;
+                }
             }
             if (keys['ArrowLeft'] || keys['a']) {
                 player.angle -= rotSpeed;
@@ -210,6 +232,12 @@
             if (keys['ArrowRight'] || keys['d']) {
                 player.angle += rotSpeed;
             }
+        }
+
+        function isWall(x, y) {
+            const mapX = Math.floor(x / tileSize);
+            const mapY = Math.floor(y / tileSize);
+            return map[mapY][mapX] > 0;
         }
 
         function update() {
@@ -230,12 +258,37 @@
                 const relativeAngle = angle - player.angle;
                 if ((Math.abs(relativeAngle) < fov / 4 || Math.abs(relativeAngle) > Math.PI * 2 - fov / 4) && distance < tileSize * 5) {
                     zombies.splice(index, 1);
+                    score++;
+                    scoreElement.innerText = `Score: ${score}`;
                     if (zombies.length === 0) {
                         alert('You won! All zombies eliminated.');
                     }
                 }
             });
         });
+
+        // Mouse look functionality
+        canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+        document.exitPointerLock = document.exitPointerLock || document.mozExitPointerLock;
+
+        canvas.onclick = function() {
+            canvas.requestPointerLock();
+        };
+
+        document.addEventListener('pointerlockchange', lockChangeAlert, false);
+        document.addEventListener('mozpointerlockchange', lockChangeAlert, false);
+
+        function lockChangeAlert() {
+            if (document.pointerLockElement === canvas || document.mozPointerLockElement === canvas) {
+                document.addEventListener("mousemove", updateMouse, false);
+            } else {
+                document.removeEventListener("mousemove", updateMouse, false);
+            }
+        }
+
+        function updateMouse(e) {
+            player.angle += e.movementX * 0.002;
+        }
     </script>
 </body>
 </html>
